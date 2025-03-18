@@ -1,0 +1,83 @@
+/*
+PIR.cpp - Arduino library for enabling front, left and right PIR sensors
+ 
+*/
+ 
+#include <Arduino.h>
+#include "PIR.h"
+ 
+sensorInput::sensorInput(){
+  
+}
+
+//Setup function for PIR sensor
+void sensorInput::setupPIR(){
+ 
+  //Setup LEDs for front PIR sensor as output pins
+  pinMode(detectedLEDFront, OUTPUT);
+  pinMode(readyLEDFront, OUTPUT);
+  pinMode(waitLEDFront, OUTPUT);
+
+  pinMode(detectedLEDLeft, OUTPUT);
+  pinMode(readyLEDLeft, OUTPUT);
+  pinMode(waitLEDLeft, OUTPUT);
+
+  pinMode(detectedLEDRight, OUTPUT);
+  pinMode(readyLEDRight, OUTPUT);
+  pinMode(waitLEDRight, OUTPUT);
+
+  //Set front PIR as input pin
+  pinMode(pirPinFront, INPUT);
+
+  pinMode(pirPinLeft, INPUT);
+
+  pinMode(pirPinRight, INPUT);
+
+  //Intial 1 Minute delay to stabilise front, left and right sensor
+  digitalWrite(detectedLEDFront, LOW);
+  digitalWrite(detectedLEDLeft, LOW);
+  digitalWrite(detectedLEDRight, LOW);
+  digitalWrite(readyLEDFront, LOW);
+  digitalWrite(readyLEDLeft, LOW);
+  digitalWrite(readyLEDRight, LOW);
+  digitalWrite(waitLEDFront, HIGH);
+  digitalWrite(waitLEDLeft, HIGH);
+  digitalWrite(waitLEDRight, HIGH);
+  delay(60000);
+  digitalWrite(readyLEDFront, HIGH);
+  digitalWrite(readyLEDLeft, HIGH);
+  digitalWrite(readyLEDRight, HIGH);
+  digitalWrite(waitLEDFront, LOW);
+  digitalWrite(waitLEDLeft, LOW);
+  digitalWrite(waitLEDRight, LOW);
+
+}
+
+//Reading PIR data from front PIR sensor and returning the value
+int sensorInput::readFrontPIRData(){
+
+  pinValueFront = digitalRead(pirPinFront);
+
+  return(pinValueFront);
+
+}
+  
+//Reading PIR data from left PIR sensor and returning the value 
+int sensorInput::readLeftPIRData(){
+
+  pinValueLeft = digitalRead(pirPinLeft);
+
+  return(pinValueLeft);
+
+}
+
+//Reading PIR data from right PIR sensor and returning the value 
+int sensorInput::readRightPIRData(){
+
+  pinValueRight = digitalRead(pirPinRight);
+
+  return(pinValueRight);
+
+} 
+  
+sensorInput pirSensor = sensorInput();

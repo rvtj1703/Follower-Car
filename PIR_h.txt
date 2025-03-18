@@ -1,0 +1,48 @@
+/*
+ PIR.h - Arduino library for enabling front, left and right PIR sensors
+ 
+ Front, left and PIR sensors are enabled for detection.
+ Methods:
+ 
+ sensorInput() - Constructor. 
+ setup(sensorPin, waitLEDPin, detectedLEDPin, readyLEDPin) - Enabling LEDs for indicating sensor status and sensor input pins
+ void readPIRdata() - Checking which PIR is activated .
+*/
+ 
+#ifndef PIR_h
+#define PIR_h
+ 
+#include <Arduino.h>
+
+#define ON 1
+#define OFF 0
+#define pirPinFront 7
+#define pirPinLeft 36
+#define pirPinRight 10
+#define waitLEDFront 4
+#define waitLEDLeft 30
+#define waitLEDRight 26
+#define readyLEDFront 5
+#define readyLEDLeft 32
+#define readyLEDRight 28
+#define detectedLEDFront 6
+#define detectedLEDLeft 31
+#define detectedLEDRight 27
+  
+class sensorInput
+{
+ 	public:
+ 		sensorInput();  //Constructor. 
+                void setupPIR();
+		int readFrontPIRData();
+		int readLeftPIRData();
+		int readRightPIRData();
+		int pinValueFront;
+		int pinValueLeft;
+		int pinValueRight;
+		
+};
+
+extern sensorInput pirSensor;
+ 
+#endif

@@ -1,0 +1,249 @@
+
+/*------------------------------------------------------------Includes----------------------------------------------------------------------*/
+#include <ros.h>
+#include<std_msgs/Int32.h>
+#include<Servo.h>
+#include"PIR.h"
+#include "HC_SR04.h"
+
+#define TRIG_PIN 23
+#define ECHO_PIN 22
+#define ECHO_INT 0
+
+HC_SR04 sensor(TRIG_PIN, ECHO_PIN, ECHO_INT);
+/*------------------------------------------------------------------------------------------------------------------------------------------*/
+
+/*--------------------------------------Creating variables of type std_msgs to publish data to raspberry pi---------------------------------*/
+ros::NodeHandle nh;
+std_msgs::Int32 pir_front_msg;
+std_msgs::Int32 pir_left_msg;
+std_msgs::Int32 pir_right_msg;
+std_msgs::Int32 ultrasonic_msg;
+/*------------------------------------------------------------------------------------------------------------------------------------------*/
+
+/*-----------------------------------Variables to store pir sensor value--------------------------------------------------------------------*/
+int pirValueFront;
+int pirValueLeft;
+int pirValueRight;
+int distance;
+/*------------------------------------------------------------------------------------------------------------------------------------------*/
+enum buggyStates {WAIT, FOLLOW, ROTATE_RIGHT, ROTATE_LEFT, OBSTACLE_AVOIDANCE};
+buggyStates state;
+
+
+Servo myservo;
+
+/*------------------------------------------------------Message Callbacks for subscribers---------------------------------------------------*/
+void motorChannelACallback(const std_msgs::Int32& motor_speed_channelA)
+{
+  int channelASpeed = motor_speed_channelA.data; 
+  
+  digitalWrite(12, LOW); //Set direction
+  digitalWrite(9, LOW); //Disengage brake
+  analogWrite(3, channelASpeed); //Set speed 
+}
+
+void motorChannelBCallback(const std_msgs::Int32& motor_speed_channelB)
+{
+  int channelBSpeed = motor_speed_channelB.data;
+  digitalWrite(13, HIGH); //Set direction
+  digitalWrite(8, LOW); //Disengage brake
+  analogWrite(11, channelBSpeed); //Set speed
+
+}
+
+
+
+/*------------------------------------------------------------------------------------------------------------------------------------------*/
+
+ros::Publisher pir_front_publisher("pirFront", &pir_front_msg);
+ros::Publisher pir_left_publisher("pirLeft", &pir_left_msg);
+ros::Publisher pir_right_publisher("pirRight", &pir_right_msg);
+ros::Publisher ultrasonic_publisher("ultrasonic", &ultrasonic_msg);
+ros::Subscriber<std_msgs::Int32> motor_subscriber_channel_A("speedChannelA", &motorChannelACallback);
+ros::Subscriber<std_msgs::Int32> motor_subscriber_channel_B("speedChannelB", &motorChannelBCallback);
+
+
+/*--------------------------------------------------------Setup function--------------------------------------------------------------------*/
+void setup() 
+{
+  //Changing the PWM frequency of pins 3 and 11 to avoid beeping issue
+  TCCR1B = (TCCR1B & 0xF8) | 0x01;
+  TCCR3B = (TCCR3B & 0xF8) | 0x01;
+
+  
+  //Calling setup function for PIR sensor
+  pirSensor.setupPIR();
+  
+  //Setup left and right motor pins as output
+  pinMode(12, OUTPUT); //Direction
+  pinMode(3, OUTPUT); //PWM
+  pinMode(9, OUTPUT); //Brake
+  digitalWrite(9, HIGH); //Engage brake
+  analogWrite(3, 0); //Set speed to zero
+
+  pinMode(13, OUTPUT); //Direction
+  pinMode(11, OUTPUT); //PWM
+  pinMode(8, OUTPUT); //Brake
+  digitalWrite(8, HIGH); //Engage brake
+  analogWrite(11, 0); //Set spped to zero
+
+
+  //Calling begin function for ultrasonic sensor
+  sensor.begin();
+  Serial.begin(9600); 
+  while(!Serial) continue;
+
+  
+  //Setting digital pin 40 as servo inputpin
+  myservo.attach(40);
+
+  nh.initNode();
+  nh.advertise(pir_front_publisher);
+  nh.advertise(pir_left_publisher);
+  nh.advertise(pir_right_publisher);
+  nh.advertise(ultrasonic_publisher);
+  nh.subscribe(motor_subscriber_channel_A);
+  nh.subscribe(motor_subscriber_channel_B);
+  
+  //Setting default state to wait
+  state = WAIT;
+
+}
+/*------------------------------------------------------------------------------------------------------------------------------------------*/
+
+/*--------------------------------------------------------Loop function---------------------------------------------------------------------*/
+void loop() 
+{
+  //Checking if ultrasonic sensor reading is detected, if detected then publishing it to raspberry pi
+  if(sensor.isFinished()){
+
+    ultrasonic_msg.data = sensor.getRange();
+    ultrasonic_publisher.publish(&ultrasonic_msg);
+    delay(1000);
+    sensor.start();
+  }
+
+
+  //Checking which PIR sensor status is high and changing buggy states based on that
+  switch(state)
+  {
+    case WAIT:
+    { 
+
+      if((OFF == (pirValueLeft = pirSensor.readLeftPIRData())) && (OFF == (pirValueRight = pirSensor.readRightPIRData())))
+      {
+        state = FOLLOW;
+      }
+     
+      else if((OFF == (pirValueFront = pirSensor.readFrontPIRData())) && (OFF == (pirValueRight = pirSensor.readRightPIRData())))
+      {
+        state = ROTATE_LEFT;
+      }
+     
+      else if((OFF == (pirValueFront = pirSensor.readFrontPIRData())) && (OFF == (pirValueLeft = pirSensor.readLeftPIRData())))
+      {
+        state = ROTATE_RIGHT;
+      }
+      
+      else
+      {
+        //Do nothing
+      }
+    }
+    break;
+
+    case FOLLOW:
+    {
+       if(ON == (pirValueFront = pirSensor.readFrontPIRData()))
+      {
+        //Turn on triggered LED and turn off ready led till sensor detects motion
+        digitalWrite(readyLEDFront, LOW);
+        digitalWrite(detectedLEDFront, HIGH);
+        myservo.write(90);
+      }
+      else
+      {
+        //Turn off triggered LED and turn on ready led till sensor detects motion
+        digitalWrite(detectedLEDFront, LOW);
+        digitalWrite(readyLEDFront, HIGH);
+        state = WAIT;
+        
+      }
+
+      //Publishing value to raspberry pi
+      pir_front_msg.data = pirValueFront;
+      pir_front_publisher.publish(&pir_front_msg);
+      
+    }
+    break;
+
+    case ROTATE_LEFT:
+    {
+      if(ON == (pirValueLeft = pirSensor.readLeftPIRData()))
+      {
+        //Turn on triggered LED and turn off ready led till sensor detects motion
+        digitalWrite(readyLEDLeft, LOW);
+        digitalWrite(detectedLEDLeft, HIGH);  
+
+         //Setting servo motor angle to 135 degrees   
+         myservo.write(135);
+      }
+      else
+      {
+
+        //Turn off triggered LED and turn on ready led till sensor detects motion
+        digitalWrite(detectedLEDLeft, LOW);
+        digitalWrite(readyLEDLeft, HIGH);
+
+        //Setting servo motor angle to 90 degrees (facing front)
+        myservo.write(90);
+        
+        state = WAIT;
+        
+      }
+
+      //Publishing value to raspberry pi
+      pir_left_msg.data = pirValueLeft;
+      pir_left_publisher.publish(&pir_left_msg);
+      
+    }
+    break;
+
+    case ROTATE_RIGHT:
+    {
+       
+      if(ON == (pirValueRight = pirSensor.readRightPIRData()))
+      {
+        //Turn on triggered LED and turn off ready led till sensor detects motion
+        digitalWrite(readyLEDRight, LOW);
+        digitalWrite(detectedLEDRight, HIGH); 
+
+        //Setting servo motor angle to 45 degrees
+        myservo.write(45);
+        
+      }
+      else
+      {
+        //Turn off triggered LED and turn on ready led till sensor detects motion
+        digitalWrite(detectedLEDRight, LOW);
+        digitalWrite(readyLEDRight, HIGH);
+
+        //Setting servo motor angle to 90 degrees (facing front)
+        myservo.write(90);
+        
+        state = WAIT;
+        
+      }
+
+      //Publishing value to raspberry pi
+      pir_right_msg.data = pirValueRight;
+      pir_right_publisher.publish(&pir_right_msg);
+      
+    }
+    break;
+  }
+ 
+  nh.spinOnce();
+
+}
